@@ -6,7 +6,8 @@ Each illustrated scene is displayed on the screen and narrated fully offline.
 After the narration, the user chooses what the character does next, and the story continues along a new branch,
 leading to multiple possible endings — all running locally on the device, without cloud or network.
 
-<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/6ad3aa0c-87b2-4f4b-86bd-320fb368330d" />
+<img width="1536" height="489" alt="111" src="https://github.com/user-attachments/assets/0eea71a1-eece-4af7-b0dc-44d59f04abcd" />
+
 
 The system consists of two parts: the CrowPanel itself and the GRC AI Add-on.
 
