@@ -1,4 +1,37 @@
-# CrowPanel Image TTS Cards — ESP32-S3 Firmware for Voicing Fairy-Tale via tinyTTS
+# CrowPanel Fairy-Tale Storyteller
+Interactive branching stories with offline TTS via CrowPanel tinyTTS Add-on
+
+An interactive on-device storytelling demo for ELECROW CrowPanel using the GRC AI Add-on with tinyTTS.
+Each illustrated scene is displayed on the screen and narrated fully offline.
+After the narration, the user chooses what the character does next, and the story continues along a new branch,
+leading to multiple possible endings — all running locally on the device, without cloud or network.
+
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/6ad3aa0c-87b2-4f4b-86bd-320fb368330d" />
+
+The system consists of two parts: the CrowPanel itself and the GRC AI Add-on.
+
+The CrowPanel runs the main firmware responsible for UI rendering, story logic, and user interaction.
+It displays each story image on the screen and controls the overall flow of the branching narrative.
+For every story scene, the CrowPanel sends the associated text to the AI Add-on.
+The Add-on runs tinyTTS locally, converts the text into audio, and streams the audio back to the CrowPanel.
+The CrowPanel receives the audio stream and plays it through an external speaker connected to the panel.
+
+All processing happens locally on the devices — no cloud, network, or external services are involved.
+
+Story images and narration texts are fully user-defined and can be replaced with any custom content,
+allowing the same firmware to be reused for different stories or applications.
+
+<img width="1102" height="495" alt="image" src="https://github.com/user-attachments/assets/e7fcf6af-a0b0-45aa-8386-23acd272bffb" />
+
+### Requirements
+
+- **GRC AI Add-on** — [hardware module](https://www.elecrow.com/grc-ai-add-on-for-crowpanel-on-hx6538.html) + [tinyTTS firmware](ljkljkj)
+- **ELECROW CrowPanel Advance 5" or 7"** — [display panel](https://www.elecrow.com/display/esp-hmi-display/esp32-hmi-display-advance-series.html) + [Storyteller firmware](https://github.com/Grovety/Crowpanel_ImgTTS_Fairy_Tale/tree/addon/firmware)
+
+
+
+## ESP32-S3 interactive storytelling firmware using tinyTTS Add-on for CrowPanel
+
 
 **Summary.** Firmware for the ELECROW CrowPanel Advance (ESP32-S3, 800×480) with an LVGL UI that displays fairy-tale photo cards and plays the text associated with each card through the **AI Addon** module (Wireless Module slot).
 The application implements a branching story (31 nodes with 16 endings) where each node has an illustration and a narrated text fragment. The project uses gifdec for animated GIF overlays. User personalization is supported via a name setting that is injected into the intro phrase.
