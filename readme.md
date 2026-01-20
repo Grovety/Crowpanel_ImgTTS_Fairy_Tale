@@ -26,7 +26,7 @@ allowing the same firmware to be reused for different stories or applications.
 
 ### Requirements
 
-- **GRC AI Add-on** — [hardware module](https://www.elecrow.com/grc-ai-add-on-for-crowpanel-on-hx6538.html) + [tinyTTS firmware](ljkljkj)
+- **GRC AI Add-on** — [hardware module](https://www.elecrow.com/grc-ai-add-on-for-crowpanel-on-hx6538.html) + [tinyTTS firmware](https://github.com/Grovety/grc_ai_add-on/tree/Fairy_Tale_TinyTTS/grc_ai_add-on)
 - **ELECROW CrowPanel Advance 5" or 7"** — [display panel](https://www.elecrow.com/display/esp-hmi-display/esp32-hmi-display-advance-series.html) + [Storyteller firmware](https://github.com/Grovety/Crowpanel_ImgTTS_Fairy_Tale/tree/addon/firmware)
 
 
