@@ -19,8 +19,11 @@ idf_component_register(
     "entities"
     "entities/i2c_comm"
     "entities/i2s"
+    
     PRIV_REQUIRES
     json
+    espressif__esp32_io_expander
+    
     REQUIRES
     driver
     esp_timer
@@ -29,8 +32,6 @@ idf_component_register(
     spiffs
     ringbuf
 )
-
-target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-missing-field-initializers)
 
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-missing-field-initializers)
 

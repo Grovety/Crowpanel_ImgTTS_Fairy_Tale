@@ -13,7 +13,7 @@
 class HimaxModule
 {
 public:
-    bool init(AudioPlayer* player);
+    bool init(AudioPlayer* player, int reset_pin);
     int waitReady(size_t timeout);
     int sendText(const char* str, size_t xTicksToWait);
     int start();
@@ -34,4 +34,6 @@ private:
     EventGroupHandle_t status_;
     AudioPlayer* player_;
     size_t dev_reset_counter_;
+
+    int reset_pin_ = -1;
 };

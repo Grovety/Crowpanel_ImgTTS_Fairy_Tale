@@ -12,6 +12,8 @@
 #include "driver/i2c.h"
 
 #include "esp_display_panel.hpp"
+#include "port/esp_io_expander.h"
+#include "port/esp_io_expander_tca9554.h"
 #include "lvgl_port_v8.h"
 
 #include "ui.h"
@@ -54,36 +56,6 @@ static esp_err_t native_i2c_write_byte(uint8_t dev_addr, uint8_t data)
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
     i2c_master_start(cmd);
     i2c_master_write_byte(cmd, (dev_addr << 1) | I2C_MASTER_WRITE, true);
-    i2c_master_write_byte(cmd, data, true);
-    i2c_master_stop(cmd);
-
-    esp_err_t ret = i2c_master_cmd_begin(I2C_PORT_NUM, cmd, pdMS_TO_TICKS(I2C_MASTER_TIMEOUT_MS));
-    i2c_cmd_link_delete(cmd);
-    return ret;
-}
-
-static esp_err_t native_i2c_read_reg(uint8_t dev_addr, uint8_t reg_addr, uint8_t *data)
-{
-    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (dev_addr << 1) | I2C_MASTER_WRITE, true);
-    i2c_master_write_byte(cmd, reg_addr, true);
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (dev_addr << 1) | I2C_MASTER_READ, true);
-    i2c_master_read_byte(cmd, data, I2C_MASTER_NACK);
-    i2c_master_stop(cmd);
-
-    esp_err_t ret = i2c_master_cmd_begin(I2C_PORT_NUM, cmd, pdMS_TO_TICKS(I2C_MASTER_TIMEOUT_MS));
-    i2c_cmd_link_delete(cmd);
-    return ret;
-}
-
-static esp_err_t native_i2c_write_reg(uint8_t dev_addr, uint8_t reg_addr, uint8_t data)
-{
-    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (dev_addr << 1) | I2C_MASTER_WRITE, true);
-    i2c_master_write_byte(cmd, reg_addr, true);
     i2c_master_write_byte(cmd, data, true);
     i2c_master_stop(cmd);
 
@@ -266,6 +238,7 @@ extern "C" void app_main()
 
     esp_log_level_set("ui_events", ESP_LOG_INFO);
     esp_log_level_set("HimaxModule", ESP_LOG_INFO);
+    esp_log_level_set("AudioPlayer", ESP_LOG_INFO);
 
     esp_log_level_set("uart", ESP_LOG_WARN);
     esp_log_level_set("uart_manager", ESP_LOG_WARN);
@@ -289,21 +262,23 @@ extern "C" void app_main()
     }
 
     bool is_v1_1 = false;
-    int retries = 5;
+    int retries = 3;
 
-    ESP_LOGI(TAG, "Scanning for Backlight Controller (0x30)...");
+    esp_io_expander_handle_t io_expander = NULL;
+
+    ESP_LOGW(TAG, "Scanning for Backlight Controller (0x30)...");
 
     while (retries > 0) {
 
         esp_err_t probe_err = native_i2c_probe(BACKLIGHT_ADDR_V1_1);
 
         if (probe_err == ESP_OK) {
-            ESP_LOGI(TAG, "Hardware V1.1 detected (0x30 Found via Probe).");
+            ESP_LOGW(TAG, "Hardware V1.1 detected (0x30 Found via Probe).");
             
             esp_err_t write_err = native_i2c_write_byte(BACKLIGHT_ADDR_V1_1, 0x10);
             
             if (write_err == ESP_OK) {
-                ESP_LOGI(TAG, "Backlight V1.1 enabled command sent.");
+                ESP_LOGW(TAG, "Backlight V1.1 enabled command sent.");
             } else {
                 ESP_LOGW(TAG, "Device 0x30 found, but write command failed.");
             }
@@ -312,59 +287,57 @@ extern "C" void app_main()
             break;
         } else {
             ESP_LOGW(TAG, "0x30 not found. Attempts left: %d", retries - 1);
-
-            native_i2c_write_byte(BACKLIGHT_ADDR_V1_1, 0x19);
-
-            gpio_set_direction(GPIO_NUM_1, GPIO_MODE_OUTPUT);
-            gpio_set_level(GPIO_NUM_1, 0);
-            vTaskDelay(pdMS_TO_TICKS(120));
-            gpio_set_direction(GPIO_NUM_1, GPIO_MODE_INPUT);
-            vTaskDelay(pdMS_TO_TICKS(200));
         }
 
         retries--;
+
+        vTaskDelay(pdMS_TO_TICKS(120));
     }
 
     if (! is_v1_1) {
-        ESP_LOGI(TAG, "Detected V1.0 Hardware. Switching to TCA9534 (0x18)...");
+        ESP_LOGW(TAG, "Detected V1.0 Hardware. Switching to TCA9534 (0x18)...");
+
+        esp_err_t err = esp_io_expander_new_i2c_tca9554(I2C_PORT_NUM, BACKLIGHT_ADDR_V1_0, &io_expander);
         
-        uint8_t config_reg = 0xFF; 
-        
-        if (native_i2c_read_reg(BACKLIGHT_ADDR_V1_0, 0x03, &config_reg) == ESP_OK) {
-            config_reg &= ~(1 << 7);
-            native_i2c_write_reg(BACKLIGHT_ADDR_V1_0, 0x03, config_reg);
+        if (err == ESP_OK && io_expander) {
+            ESP_LOGW(TAG, "IO Expander initialized successfully. Configuring pins...");
             
-            uint8_t output_reg = 0x00;
-            native_i2c_read_reg(BACKLIGHT_ADDR_V1_0, 0x01, &output_reg);
+            i2c_bus_lock(-1);
+            uint32_t output_pins = BIT(1) | BIT(2) | BIT(3) | BIT(4) | BIT(7);
+
+            esp_io_expander_set_dir(io_expander, output_pins, IO_EXPANDER_OUTPUT);
+            esp_io_expander_set_level(io_expander, BIT(1) | BIT(7) | BIT(3), 1);
+
+            gpio_set_direction(GPIO_NUM_1, GPIO_MODE_OUTPUT);
+            gpio_set_level(GPIO_NUM_1, 0);
+
+            esp_io_expander_set_level(io_expander, BIT(2), 0);
+            vTaskDelay(pdMS_TO_TICKS(20));
+            esp_io_expander_set_level(io_expander, BIT(2), 1);
+
+            vTaskDelay(pdMS_TO_TICKS(100));
+            gpio_set_direction(GPIO_NUM_1, GPIO_MODE_INPUT);
+
+            i2c_bus_unlock();
+
+            ESP_LOGW(TAG, "V1.0 Init sequence completed.");
             
-            output_reg |= (1 << 7);
-            native_i2c_write_reg(BACKLIGHT_ADDR_V1_0, 0x01, output_reg);
-            
-            ESP_LOGI(TAG, "Backlight V1.0 enabled via TCA9534 (0x18)");
         } else {
-            ESP_LOGE(TAG, "Failed to communicate with TCA9534 (0x18)!");
+            ESP_LOGE(TAG, "Failed to init TCA9534: %s", esp_err_to_name(err));
         }
+
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 
     Board* board = new Board();
     ESP_UTILS_CHECK_FALSE_EXIT(board->init(), "Board init failed");
     ESP_UTILS_CHECK_FALSE_EXIT(board->begin(), "Board begin failed");
 
-    esp_expander::Base* io_expander_ptr  = nullptr;
-
-    if (! is_v1_1) {
-        if (board->getIO_Expander()) {
-            io_expander_ptr = board->getIO_Expander()->getBase();
-            ESP_LOGI(TAG, "Passing IO Expander to AudioPlayer (V1.0)");
-        } else {
-            ESP_LOGE(TAG, "Critical: V1.0 detected but IO Expander not initialized by Board!");
-        }
-    } else {
-        ESP_LOGI(TAG, "Passing nullptr to AudioPlayer (V1.1)");
-    }
+    int himax_reset_pin = is_v1_1 ? GPIO_NUM_8 : GPIO_NUM_0;
+    ESP_LOGW(TAG, "Initializing Himax Module with Reset Pin: %d", himax_reset_pin);
     
-    s_audio_player.init(io_expander_ptr, PAYLOAD_SIZE);
-    s_himax_module.init(&s_audio_player);
+    s_audio_player.init(io_expander, PAYLOAD_SIZE);
+    s_himax_module.init(&s_audio_player, himax_reset_pin);
 
     ESP_UTILS_CHECK_FALSE_EXIT(lvgl_port_init(board->getLCD(), board->getTouch()), "LVGL init failed");
 

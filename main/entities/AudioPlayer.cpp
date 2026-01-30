@@ -3,23 +3,19 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-
 #include "freertos/FreeRTOS.h"
-
 #include "driver/gpio.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
-
 #include "AudioPlayer.h"
 #include "i2s/i2s_tx.h"
 
 extern "C" void ui_bird_talk_anim_stop(void);
 extern "C" void ui_bird_talk_anim_start(void);
-
 extern "C" void ui_notify_audio_playback_finished(void);
 
-#define SPK_MUTE_PIN GPIO_NUM_3
-#define SPK_SHUT_PIN GPIO_NUM_4
+#define IO_MUTE_PIN_MASK (1ULL << 3)
+#define IO_SHUT_PIN_MASK (1ULL << 4)
 
 #define STATUS_ON      BIT0
 #define STATUS_PLAYING BIT1
@@ -36,7 +32,6 @@ void AudioPlayer::control_task(void* arg)
                 ESP_LOGD(TAG, "Start playback");
                 player->enable();
                 xEventGroupSetBits(player->status_, STATUS_PLAYING);
-
                 ui_bird_talk_anim_start();
             }
         }
@@ -44,16 +39,12 @@ void AudioPlayer::control_task(void* arg)
             while (! fifo_ringbuf_empty(player->audio_buffer_)) {
                 vTaskDelay(pdMS_TO_TICKS(100));
             }
-
             xEventGroupClearBits(player->status_, STATUS_PLAYING);
             ESP_LOGD(TAG, "Stop playback");
             player->disable();
-
             ui_bird_talk_anim_stop();
-
             ui_notify_audio_playback_finished();
         }
-
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
@@ -76,40 +67,34 @@ void AudioPlayer::play_task(void* arg)
     free(buffer);
 }
 
-bool AudioPlayer::init(esp_expander::Base* io_expander, size_t frame_size_)
+bool AudioPlayer::init(esp_io_expander_handle_t io_handle, size_t frame_size_)
 {
-    this->io_expander_ = io_expander;
-
+    this->io_handle_ = io_handle;
     this->frame_size_ = frame_size_;
     audio_buffer_     = fifo_ringbuf_init(kRingBufferSize, frame_size_);
     if (! audio_buffer_) {
         return false;
     }
-
     i2s_tx_init();
 
-    if (this->io_expander_) {
+    if (this->io_handle_) {
         i2c_bus_lock(-1);
-        io_expander_->pinMode(SPK_MUTE_PIN, OUTPUT);
-        io_expander_->pinMode(SPK_SHUT_PIN, OUTPUT);
-        io_expander_->digitalWrite(SPK_MUTE_PIN, HIGH);
-        io_expander_->digitalWrite(SPK_SHUT_PIN, LOW);
+        esp_io_expander_set_dir(this->io_handle_, IO_MUTE_PIN_MASK | IO_SHUT_PIN_MASK, IO_EXPANDER_OUTPUT);
+        esp_io_expander_set_level(this->io_handle_, IO_MUTE_PIN_MASK, 1);
+        esp_io_expander_set_level(this->io_handle_, IO_SHUT_PIN_MASK, 0);
         i2c_bus_unlock();
     }
-
+    
     status_ = xEventGroupCreate();
     if (! status_) {
         ESP_LOGE(TAG, "Unable to crate status bits");
         return false;
     }
     xEventGroupClearBits(status_, STATUS_PLAYING);
-
-    if (xTaskCreate(control_task, "PlayerControlTask", 4096, this, 1, nullptr) != pdTRUE)
-        return false;
-
-    if (xTaskCreate(play_task, "PlayerPlayTask", 4096, this, 1, nullptr) != pdTRUE)
-        return false;
-
+    
+    if (xTaskCreate(control_task, "PlayerControlTask", 4096, this, 1, nullptr) != pdTRUE) return false;
+    if (xTaskCreate(play_task, "PlayerPlayTask", 4096, this, 1, nullptr) != pdTRUE) return false;
+    
     return true;
 }
 
@@ -124,13 +109,11 @@ bool AudioPlayer::enable()
     if (xEventGroupGetBits(status_) & STATUS_ON) {
         return false;
     }
-
-    if (io_expander_) {
+    if (io_handle_) {
         i2c_bus_lock(-1);
-        io_expander_->digitalWrite(SPK_MUTE_PIN, LOW);
+        esp_io_expander_set_level(io_handle_, IO_MUTE_PIN_MASK, 0);
         i2c_bus_unlock();
     }
-    
     xEventGroupSetBits(status_, STATUS_ON);
     return true;
 }
@@ -140,13 +123,11 @@ bool AudioPlayer::disable()
     if (! (xEventGroupGetBits(status_) & STATUS_ON)) {
         return false;
     }
-
-    if (io_expander_) {
+    if (io_handle_) {
         i2c_bus_lock(-1);
-        io_expander_->digitalWrite(SPK_MUTE_PIN, HIGH);
+        esp_io_expander_set_level(io_handle_, IO_MUTE_PIN_MASK, 1);
         i2c_bus_unlock();
     }
-    
     xEventGroupClearBits(status_, STATUS_ON);
     return true;
 }

@@ -15,8 +15,6 @@
 #include "i2c_comm/crc_table.h"
 #include "i2c_comm/i2c_master.h"
 
-#define HIMAX_RESET_PIN GPIO_NUM_0
-
 #define STATUS_HM_BUSY   BIT0
 #define STATUS_HM_PAUSED BIT1
 
@@ -314,10 +312,11 @@ int HimaxModule::resume()
     return 0;
 }
 
-bool HimaxModule::init(AudioPlayer* player)
+bool HimaxModule::init(AudioPlayer* player, int reset_pin)
 {
     dev_reset_counter_ = 0;
     player_            = player;
+    reset_pin_ = reset_pin;
 
     status_ = xEventGroupCreate();
     if (! status_) {
@@ -328,8 +327,8 @@ bool HimaxModule::init(AudioPlayer* player)
     if (xTaskCreate(task, "himax_i2c", 4096, this, 1, nullptr) != pdTRUE)
         return false;
 
-    gpio_reset_pin(HIMAX_RESET_PIN);
-    gpio_set_direction(HIMAX_RESET_PIN, GPIO_MODE_OUTPUT);
+    gpio_reset_pin((gpio_num_t)reset_pin_);
+    gpio_set_direction((gpio_num_t)reset_pin_, GPIO_MODE_OUTPUT);
     dev_reset();
     vTaskDelay(pdMS_TO_TICKS(300));
 
@@ -350,9 +349,9 @@ bool HimaxModule::init(AudioPlayer* player)
 void HimaxModule::dev_reset()
 {
     ESP_LOGI(TAG, "Reset device: %u", dev_reset_counter_++);
-    gpio_set_level(HIMAX_RESET_PIN, 0);
+    gpio_set_level((gpio_num_t)reset_pin_, 0);
     vTaskDelay(pdMS_TO_TICKS(100));
-    gpio_set_level(HIMAX_RESET_PIN, 1);
+    gpio_set_level((gpio_num_t)reset_pin_, 1);
 }
 
 int HimaxModule::dev_probe()

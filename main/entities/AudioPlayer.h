@@ -1,14 +1,13 @@
 #pragma once
-
 #include "esp_display_panel.hpp"
 #include "freertos/event_groups.h"
-
 #include "fifo_ringbuf.h"
+#include "port/esp_io_expander.h"
 
 class AudioPlayer
 {
 public:
-    bool init(esp_expander::Base* io_expander, size_t frame_size);
+    bool init(esp_io_expander_handle_t io_handle, size_t frame_size);
     bool write(const uint8_t* data, size_t bytes, size_t ticks_to_wait);
     bool isOn();
     bool enable();
@@ -24,8 +23,11 @@ private:
     static constexpr size_t kRingBufferSize    = 50;
     static constexpr size_t kPlaybackStartThre = 20;
     static constexpr char TAG[]                = "AudioPlayer";
+
     fifo_ringbuf_t* audio_buffer_;
     size_t frame_size_;
-    esp_expander::Base* io_expander_;
+    
+    esp_io_expander_handle_t io_handle_; 
+    
     EventGroupHandle_t status_;
 };
